@@ -1,0 +1,50 @@
+net_name: 'seunet'
+train_dir: '/home/data/BraTs_Seg_Study/data/'
+train_list: 'BrainSeg_train:.txt'
+test_dir: '/home/data/BraTs_Seg_Study/data/'
+test_list: 'BrainSeg_test.txt'
+
+pretrain_model: ''
+resume_model: ''
+input_height: 160
+input_width: 160
+train_epoch : 50
+# change the batchsize
+batch_size: 2 # 32
+print_freq : 100
+last_iter : -1
+augment: True
+sync: True
+train_output_directory: 'checkpoints/BrainSeg'
+savedir: 'checkpoints/save'
+caffe_dir: checkpoints/caffe_model/BrainSeg
+onnx_dir: checkpoints/onnx_model/BrainSeg
+
+bn: 'sync'
+
+model:
+  in_channel: 4
+  out_channel: 2
+
+
+optimizer:
+  type: 'adam'
+  
+lr_scheduler:
+  base_lr: 0.001
+  type: STEP                  #or COSINE
+  gamma: 0.1                  #default for STEP
+  verbose: False               #default for STEP
+  step_size: 30                 #default for STEP
+  last_epoch: -1       
+
+
+loss:
+  type: 'focal'
+  kwargs:
+    class_num: 2
+
+eval:
+  lower_bound: 0
+  upper_bound: 192
+  eval_occlusion: True
