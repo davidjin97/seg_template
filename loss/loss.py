@@ -10,6 +10,9 @@ except ImportError:
 
 
 class BCEDiceLoss(nn.Module):
+    """
+    BCE + Dice Loss for LITS dataset, which has liver mask and tumor mask
+    """
     def __init__(self):
         super(BCEDiceLoss, self).__init__()
 

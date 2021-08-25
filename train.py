@@ -2,6 +2,7 @@
 
 import time
 import os
+from pathlib import Path
 import math
 import argparse
 from glob import glob
@@ -35,10 +36,10 @@ import loss.loss as losses
 from utils.utils import str2bool, count_params
 import pandas as pd
 from networks.Unet3D_gh import UNet3d
-from networks import ResUnet3D
+# from networks import ResUnet3D
 
 arch_names = list(UNet3d.__dict__.keys())
-arch_names = list(ResUnet3D.__dict__.keys())
+# arch_names = list(ResUnet3D.__dict__.keys())
 loss_names = list(losses.__dict__.keys())
 loss_names.append('BCEWithLogitsLoss')
 
@@ -70,13 +71,13 @@ def parse_args():
                             ' (default: BCEDiceLoss)')
     parser.add_argument('--epochs', default=500, type=int, metavar='N',
                         help='number of total epochs to run')
-    parser.add_argument('--early-stop', default=100, type=int,
+    parser.add_argument('--early-stop', default=20, type=int,
                         metavar='N', help='early stopping (default: 20)')
     parser.add_argument('-b', '--batch-size', default=16, type=int,
                         metavar='N', help='mini-batch size (default: 16)')
     parser.add_argument('--optimizer', default='Adam',
                         choices=['Adam', 'SGD'],
-                        help='loss: ' +
+                        help='optimizer: ' +
                             ' | '.join(['Adam', 'SGD']) +
                             ' (default: Adam)')
     parser.add_argument('--lr', '--learning-rate', default=3e-4, type=float,
@@ -115,11 +116,11 @@ def train(args, train_loader, model, criterion, optimizer, epoch, scheduler=None
     dices_1s = AverageMeter()
     dices_2s = AverageMeter()
     model.train()
+    print('in train process')
 
     for i, (input, target) in tqdm(enumerate(train_loader), total=len(train_loader)):
-
-        #print(input.shape)
-        #print(target.shape)
+        # print(input.shape) # torch.Size([2, 1, 64, 128, 160])
+        # print(target.shape) # torch.Size([2, 2, 64, 128, 160])
         #v = input()
         input = input.cuda()
         target = target.cuda()
@@ -134,7 +135,8 @@ def train(args, train_loader, model, criterion, optimizer, epoch, scheduler=None
             iou = iou_score(outputs[-1], target)
         else:
             output = model(input)
-            output = output[-1] # resunet3d的输出是4个
+            # print(output.shape) # torch.Size([2, 2, 64, 128, 160])
+            # output = output[-1] # resunet3d的输出是4个
             loss = criterion(output, target) 
             iou = iou_score(output, target) 
             dice_1 = dice_coef(output, target)[0]
@@ -205,27 +207,28 @@ def validate(args, val_loader, model, criterion):
 
 def main():
     args = parse_args()
-    #args.dataset = "datasets"
 
     if args.name is None:
         if args.deepsupervision:
-            args.name = '%s_%s_lpy' %(args.dataset, args.arch)
+            args.name = '%s_%s_ds_jzw' %(args.dataset, args.arch)
         else:
-            args.name = '%s_%s_lpy' %(args.dataset, args.arch)
+            args.name = '%s_%s_jzw' %(args.dataset, args.arch)
     timestamp  = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
-    if not os.path.exists('/home/data/lpyWeight/paper/experiment/models/3d/{}/{}'.format(args.name,timestamp)):
-        os.makedirs('/home/data/lpyWeight/paper/experiment/models/3d/{}/{}'.format(args.name,timestamp))
+    exp_path = Path(f"./runs/models/3d/{args.name}/{timestamp}")
+    exp_path.mkdir(parents=True)
 
-    print('Config -----')
+    # ----------------------- handle arguments -----------------------
+    print('Config ---------------')
     for arg in vars(args):
         print('%s: %s' %(arg, getattr(args, arg)))
-    print('------------')
+    print('----------------------')
 
-    with open('/home/data/lpyWeight/paper/experiment/models/3d/{}/{}/args.txt'.format(args.name,timestamp), 'w') as f:
+    with open(exp_path / 'args.txt', 'w') as f:
         for arg in vars(args):
             print('%s: %s' %(arg, getattr(args, arg)), file=f)
 
-    joblib.dump(args, '/home/data/lpyWeight/paper/experiment/models/3d/{}/{}/args.pkl'.format(args.name,timestamp))
+    assert 1>2
+    joblib.dump(args, exp_path / 'args.pkl')
 
     # define loss function (criterion)
     if args.loss == 'BCEWithLogitsLoss':
@@ -236,24 +239,27 @@ def main():
     cudnn.benchmark = True
 
     # Data loading code
-    
-    img_paths = glob('/home/data/LiTS/LITS17/train_image3d/*')
-    mask_paths = glob('/home/data/LiTS/LITS17/train_image3d/*')
+    ### 疑惑：如何制作3d图的npy文件，代码在何处
+    img_paths = glob('/home/jzw/data/LiTS/LITS17/train_image3d/*')
+    mask_paths = glob('/home/jzw/data/LiTS/LITS17/train_mask3d/*')
+    img_paths = img_paths[:10]
+    mask_paths = mask_paths[:10]
+    # assert len(img_paths) == len(mask_paths)
 
     train_img_paths, val_img_paths, train_mask_paths, val_mask_paths = \
         train_test_split(img_paths, mask_paths, test_size=0.3, random_state=39)
-    print("train_num:%s"%str(len(train_img_paths)))
-    print("val_num:%s"%str(len(val_img_paths)))
+    print(f"train_num:{len(train_img_paths)}")
+    print(f"val_num:{len(val_img_paths)}")
 
     # create model
     print("=> creating model %s" %args.arch)
-    # model = UNet3d(in_channels=1, n_classes=2, n_channels=32)
-    model = ResUnet3D.DialResUNet(training=True)
+    model = UNet3d(in_channels=1, n_classes=2, n_channels=32)
+    # model = ResUnet3D.DialResUNet(training=True)
     model = torch.nn.DataParallel(model, device_ids=[0]).cuda()
     #model._initialize_weights()
     #model.load_state_dict(torch.load('model.pth'))
 
-    print(count_params(model))
+    print("model params: ", count_params(model))
 
     if args.optimizer == 'Adam':
         optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr)
@@ -261,6 +267,7 @@ def main():
         optimizer = optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr,
             momentum=args.momentum, weight_decay=args.weight_decay, nesterov=args.nesterov)
 
+    # prepare dataset
     train_dataset = Dataset(args, train_img_paths, train_mask_paths, args.aug)
     val_dataset = Dataset(args, val_img_paths, val_mask_paths)
 
@@ -313,14 +320,14 @@ def main():
         ], index=['epoch', 'lr', 'loss', 'iou', 'dice_1' ,'dice_2' ,'val_loss', 'val_iou', 'val_dice_1' ,'val_dice_2'])
 
         log = log.append(tmp, ignore_index=True)
-        log.to_csv('/home/data/lpyWeight/paper/experiment/models/3d/{}/{}/log.csv'.format(args.name,timestamp), index=False)
+        log.to_csv(str(exp_path / 'log.csv'), index=False)
 
         trigger += 1
 
         # val_loss = val_log['loss']
 
         if val_log['iou'] > best_iou:
-            torch.save(model.state_dict(), '/home/data/lpyWeight/paper/experiment/models/3d/{}/{}/epoch{}-{:.4f}-{:.4f}_model.pth'.format(args.name,timestamp,epoch,val_log['dice_1'],val_log['dice_2']))
+            torch.save(model.state_dict(), exp_path / 'epoch{}-{:.4f}-{:.4f}_model.pth'.format(epoch,val_log['dice_1'],val_log['dice_2']))
             best_iou = val_log['iou']
             print("=> saved best model")
             trigger = 0
@@ -340,5 +347,5 @@ def main():
         torch.cuda.empty_cache()
 
 if __name__ == '__main__':
-    os.environ['CUDA_VISIBLE_DEVICES'] = '2'
+    os.environ['CUDA_VISIBLE_DEVICES'] = '3'
     main()

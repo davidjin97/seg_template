@@ -28,10 +28,14 @@ class Dataset(torch.utils.data.Dataset):
         img_path = self.img_paths[idx]
         mask_path = self.mask_paths[idx]
         npimage = np.load(img_path)
-        npmask = np.load(mask_path)
+        npmask = np.load(mask_path) # 0表示背景，1表示肝脏，2表示肝脏肿瘤
+        # print(npimage.shape) # (64, 128, 160)
+        # print(npmask.shape) # (64, 128, 160)
         npimage = npimage[:, :, :, np.newaxis]
         npimage = npimage.transpose((3, 0, 1, 2))
+        # print(npimage.shape) # (1, 64, 128, 160)
 
+        # 拆分 liver 和 tumor label
         liver_label = npmask.copy()
         liver_label[npmask == 2] = 1
         liver_label[npmask == 1] = 1
@@ -48,11 +52,11 @@ class Dataset(torch.utils.data.Dataset):
         nplabel = nplabel.transpose((3, 0, 1, 2))
         nplabel = nplabel.astype("float32")
         npimage = npimage.astype("float32")
-        #print(npimage.shape)
 
-        return npimage,nplabel
+        return npimage, nplabel # (1, 64, 128, 160), (2, 64, 128, 160)
 if __name__=="__main__":
-    dataset = Dataset()
+    pass
+    # dataset = Dataset()
 
 
        
